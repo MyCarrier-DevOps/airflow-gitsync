@@ -1,1 +1,1 @@
-# airflow-gitsync
+# airflow_gitsync
