@@ -73,7 +73,7 @@ def clone(path: str, repos: list):
             thisRepo = Repo(thisPath.__str__())
             thisRepo.git.pull()
         else:
-            Repo.clone_from(f"https://github.com/MyCarrier-DevOps/{repo}.git", thisPath)
+            Repo.clone_from(f"https://oauth2:{github.auth.token}@github.com/MyCarrier-DevOps/{repo}.git", thisPath)
 
 if __name__ == '__main__':
     # Setup vars
