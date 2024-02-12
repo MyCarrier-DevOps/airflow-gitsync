@@ -1,0 +1,4 @@
+hvac~=2.1.0
+python-dotenv~=1.0.1
+PyGithub~=2.2.0
+PyJWT~=2.8.0
