@@ -5,7 +5,6 @@ from pathlib import Path
 import hvac
 import sys
 import time
-# import jwt
 from github import Auth, Github
 from git import Repo
 from dotenv import load_dotenv
