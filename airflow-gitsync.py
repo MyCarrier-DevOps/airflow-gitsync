@@ -103,6 +103,8 @@ if __name__ == '__main__':
     org = github.session.get_organization(ORG_NAME)
     loop = True
     while loop:
+        github = GithubSession(ROLE_ID, SECRET_ID)
+        org = github.session.get_organization(ORG_NAME)
         reposObj = github.session.search_repositories(query='org:MyCarrier-DevOps topic:airflow-dags template:false')
         repos = [repo.name for repo in reposObj]
         os.makedirs(DAG_PATH+'/test-dag')
