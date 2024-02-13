@@ -65,7 +65,7 @@ def repo_cleanup(path: str, repos: list[str]):
         if d not in repos:
             shutil.rmtree(path+'/'+d)
 
-def clone(path: str, repos: list):
+def clone(path: str, repos: list, token: str):
     for repo in repos:
         Path(path).mkdir(parents=True, exist_ok=True)
         thisPath = Path(f"{path}/{repo}")
@@ -73,7 +73,7 @@ def clone(path: str, repos: list):
             thisRepo = Repo(thisPath.__str__())
             thisRepo.git.pull()
         else:
-            Repo.clone_from(f"https://oauth2:{github.auth.token}@github.com/MyCarrier-DevOps/{repo}.git", thisPath)
+            Repo.clone_from(f"https://oauth2:{token}@github.com/MyCarrier-DevOps/{repo}.git", thisPath)
 
 if __name__ == '__main__':
     # Setup vars
@@ -107,7 +107,7 @@ if __name__ == '__main__':
         repos = [repo.name for repo in reposObj]
         os.makedirs(DAG_PATH+'/test-dag')
         repo_cleanup(DAG_PATH, repos)
-        clone(DAG_PATH, repos)
+        clone(DAG_PATH, repos, github.auth.token)
         if OPERATION == 'pull':
             loop = False
         else:
