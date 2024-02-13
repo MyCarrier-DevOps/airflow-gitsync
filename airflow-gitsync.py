@@ -68,7 +68,7 @@ def repo_cleanup(path: str, repos: list[str]):
 def clone(path: str, repos: list, token: str):
     for repo in repos:
         Path(path).mkdir(parents=True, exist_ok=True)
-        thisPath = Path(f"{path}/{repo}")
+        thisPath = Path(f"{path}/git_{repo}")
         if thisPath.is_dir():
             thisRepo = Repo(thisPath.__str__())
             thisRepo.git.pull()
@@ -107,7 +107,6 @@ if __name__ == '__main__':
         org = github.session.get_organization(ORG_NAME)
         reposObj = github.session.search_repositories(query='org:MyCarrier-DevOps topic:airflow-dags template:false')
         repos = [repo.name for repo in reposObj]
-        os.makedirs(DAG_PATH+'/test-dag')
         repo_cleanup(DAG_PATH, repos)
         clone(DAG_PATH, repos, github.auth.token)
         if OPERATION == 'pull':
