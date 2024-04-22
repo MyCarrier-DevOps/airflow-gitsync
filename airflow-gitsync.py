@@ -30,7 +30,7 @@ class Vault:
             raise error
 
 class GithubSession:
-    def __init__(self, role_id, secret_id):
+    def __init__(self, role_id, secret_id, organization):
         self.role_id = role_id
         self.secret_id = secret_id
         self.auth = None
@@ -40,19 +40,19 @@ class GithubSession:
         self.installid = None
         self.session = None
         self.renew_vault()
-        self.pull_secrets()
+        self.pull_secrets(organization)
         self.authenticate()
         self.connect()
 
     def renew_vault(self):
         self.vault = Vault(role_id=self.role_id, secret_id=self.secret_id)
-    def pull_secrets(self):
+    def pull_secrets(self, organization: str):
         v = self.vault.Client.secrets.kv.v2
-        self.pem = v.read_secret_version(mount_point='DevOps', path='github/AppAccess',
+        self.pem = v.read_secret_version(mount_point='DevOps', path=f'github/{organization}',
                                                     raise_on_deleted_version=False)['data']['data']['PrivateKey']
-        self.appid = v.read_secret_version(mount_point='DevOps', path='github/AppAccess',
+        self.appid = v.read_secret_version(mount_point='DevOps', path=f'github/{organization}',
                                                     raise_on_deleted_version=False)['data']['data']['AppId']
-        self.installid = int(v.read_secret_version(mount_point='DevOps', path='github/AppAccess',
+        self.installid = int(v.read_secret_version(mount_point='DevOps', path=f'github/{organization}',
                                                     raise_on_deleted_version=False)['data']['data']['InstallationId'])
 
     def authenticate(self):
@@ -65,15 +65,16 @@ def repo_cleanup(path: str, repos: list[str]):
         if d not in repos:
             shutil.rmtree(path+'/'+d)
 
-def clone(path: str, repos: list, token: str):
+def clone(path: str, repos: list, token: str, organization: str):
     for repo in repos:
+        print('cloning '+repo)
         Path(path).mkdir(parents=True, exist_ok=True)
         thisPath = Path(f"{path}/git_{repo}")
         if thisPath.is_dir():
             thisRepo = Repo(thisPath.__str__())
             thisRepo.git.pull()
         else:
-            Repo.clone_from(f"https://oauth2:{token}@github.com/MyCarrier-DevOps/{repo}.git", thisPath)
+            Repo.clone_from(f"https://oauth2:{token}@github.com/{organization}/{repo}.git", thisPath)
 
 if __name__ == '__main__':
     # Setup vars
@@ -96,20 +97,22 @@ if __name__ == '__main__':
     if DAG_PATH == None:
         load_dotenv()
         DAG_PATH = os.getenv('DAG_PATH')
-    ORG_NAME = 'MyCarrier-DevOps'
+    ORG_NAMES = ['MyCarrier-DevOps', 'MyCarrier-Engineering']
+
     if not os.path.isdir(DAG_PATH):
         os.makedirs(DAG_PATH)
-    github = GithubSession(ROLE_ID, SECRET_ID)
-    org = github.session.get_organization(ORG_NAME)
     loop = True
     while loop:
-        github = GithubSession(ROLE_ID, SECRET_ID)
-        org = github.session.get_organization(ORG_NAME)
-        reposObj = github.session.search_repositories(query='org:MyCarrier-DevOps topic:airflow-dags template:false')
-        repos = [repo.name for repo in reposObj]
-        repo_cleanup(DAG_PATH, repos)
-        clone(DAG_PATH, repos, github.auth.token)
-        if OPERATION == 'pull':
-            loop = False
+        for ORG_NAME in ORG_NAMES:
+            github = GithubSession(ROLE_ID, SECRET_ID, ORG_NAME)
+            org = github.session.get_organization(ORG_NAME)
+            print(f"Organization: {ORG_NAME}")
+            reposObj = github.session.search_repositories(query=f'org:{ORG_NAME} topic:airflow-dags template:false')
+            repos = [repo.name for repo in reposObj]
+            print(repos)
+            repo_cleanup(DAG_PATH, repos)
+            clone(DAG_PATH, repos, github.auth.token, ORG_NAME)
+            if OPERATION == 'pull':
+                loop = False
         else:
             time.sleep(60)
