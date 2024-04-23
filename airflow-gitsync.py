@@ -102,17 +102,20 @@ if __name__ == '__main__':
     if not os.path.isdir(DAG_PATH):
         os.makedirs(DAG_PATH)
     loop = True
+    repos = []
     while loop:
         for ORG_NAME in ORG_NAMES:
             github = GithubSession(ROLE_ID, SECRET_ID, ORG_NAME)
             org = github.session.get_organization(ORG_NAME)
-            print(f"Organization: {ORG_NAME}")
             reposObj = github.session.search_repositories(query=f'org:{ORG_NAME} topic:airflow-dags template:false')
-            repos = [repo.name for repo in reposObj]
-            print(repos)
-            repo_cleanup(DAG_PATH, repos)
-            clone(DAG_PATH, repos, github.auth.token, ORG_NAME)
-            if OPERATION == 'pull':
+            theseRepos = [{"repository": repo.name, "token": github.auth.token, "org":ORG_NAME} for repo in reposObj]
+            repos.extend(theseRepos)
+        repo_cleanup(DAG_PATH, [repo['repository'] for repo in repos])
+        for repo in repos:
+            print(f'Cloning {repo["repository"]} from {repo["org"]}')
+            clone(DAG_PATH, repo['repository'], repo['token'], repo['org'])
+        if OPERATION == 'pull':
                 loop = False
         else:
             time.sleep(60)
+        repos = []
