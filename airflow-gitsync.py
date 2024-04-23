@@ -65,16 +65,16 @@ def repo_cleanup(path: str, repos: list[str]):
         if d not in repos:
             shutil.rmtree(path+'/'+d)
 
-def clone(path: str, repos: list, token: str, organization: str):
+def clone(path: str, repos: list[object]):
     for repo in repos:
-        print('cloning '+repo)
+        print(f'Cloning {repo["repository"]} from {repo["org"]} into {path}')
         Path(path).mkdir(parents=True, exist_ok=True)
-        thisPath = Path(f"{path}/git_{repo}")
+        thisPath = Path(f"{path}/git_{repo["repository"]}")
         if thisPath.is_dir():
             thisRepo = Repo(thisPath.__str__())
             thisRepo.git.pull()
         else:
-            Repo.clone_from(f"https://oauth2:{token}@github.com/{organization}/{repo}.git", thisPath)
+            Repo.clone_from(f"https://oauth2:{repo["token"]}@github.com/{repo["organization"]}/{repo["repository"]}.git", thisPath)
 
 if __name__ == '__main__':
     # Setup vars
@@ -111,9 +111,7 @@ if __name__ == '__main__':
             theseRepos = [{"repository": repo.name, "token": github.auth.token, "org":ORG_NAME} for repo in reposObj]
             repos.extend(theseRepos)
         repo_cleanup(DAG_PATH, [repo['repository'] for repo in repos])
-        for repo in repos:
-            print(f'Cloning {repo["repository"]} from {repo["org"]}')
-            clone(DAG_PATH, repo['repository'], repo['token'], repo['org'])
+        clone(DAG_PATH, repos)
         if OPERATION == 'pull':
                 loop = False
         else:
