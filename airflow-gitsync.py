@@ -74,7 +74,7 @@ def clone(path: str, repos: list[object]):
             thisRepo = Repo(thisPath.__str__())
             thisRepo.git.pull()
         else:
-            Repo.clone_from(f'https://oauth2:{repo["token"]}@github.com/{repo["organization"]}/{repo["repository"]}.git', thisPath)
+            Repo.clone_from(f'https://oauth2:{repo["token"]}@github.com/{repo["org"]}/{repo["repository"]}.git', thisPath)
 
 if __name__ == '__main__':
     # Setup vars
