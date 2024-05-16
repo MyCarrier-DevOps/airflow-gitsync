@@ -3,7 +3,7 @@ import tempfile
 import os
 import shutil
 from pathlib import Path
-from airflow_gitsync import repo_cleanup
+from gitsync import repo_cleanup
 
 
 class TestRepoCleanup(unittest.TestCase):
