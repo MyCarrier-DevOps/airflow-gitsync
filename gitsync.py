@@ -116,7 +116,6 @@ if __name__ == '__main__':
             repos.extend(theseRepos)
         repo_cleanup(DAG_PATH, [f"git_{repo['repository']}" for repo in repos])
         clone(DAG_PATH, repos)
-        gc.collect()
         if OPERATION == 'pull':
                 loop = False
         else:
