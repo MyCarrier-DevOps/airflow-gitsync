@@ -93,14 +93,20 @@ def clone(path: str, repos: list[object]):
                     shutil.rmtree(thisPath)
                     print(f'{datetime.datetime.now()} Cloning {repo["repository"]} from {repo["org"]} into {path}')
                     clonePath = f'https://oauth2:{repo["token"]}@github.com/{repo["org"]}/{repo["repository"]}.git'
-                    Repo.clone_from(clonePath, thisPath)
+                    thisRepo = Repo.clone_from(clonePath, thisPath)
+                    thisRepo.__del__()
+                finally: 
+                    thisRepo.__del__()
 
             else:
                 print(f'{datetime.datetime.now()} Cloning {repo["repository"]} from {repo["org"]} into {path}')
                 clonePath = f'https://oauth2:{repo["token"]}@github.com/{repo["org"]}/{repo["repository"]}.git'
-                Repo.clone_from(clonePath, thisPath)
+                thisRepo = Repo.clone_from(clonePath, thisPath)
+                thisRepo.__del__()
         except Exception as e:
             raise e
+            
+
 
 
 if __name__ == '__main__':
@@ -147,5 +153,5 @@ if __name__ == '__main__':
         if OPERATION == 'pull':
                 loop = False
         else:
-            time.sleep(60)
+            time.sleep(30)
         repos = []
