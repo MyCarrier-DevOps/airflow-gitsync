@@ -185,7 +185,7 @@ func contains(slice []string, item string) bool {
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		print("Error loading .env file, proceeding with environment variables")
 	}
 	roleID := os.Getenv("ROLE_ID")
 	secretID := os.Getenv("SECRET_ID")
