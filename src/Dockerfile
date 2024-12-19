@@ -1,7 +1,8 @@
 FROM golang:1.23.4 AS builder
 WORKDIR /app
-COPY . .
-RUN go mod download && CGO_ENABLED=0 GOOS=linux go build -o /gitsync
+COPY go.mod go.sum ./
+RUN go mod download 
+RUN CGO_ENABLED=0 GOOS=linux go build -o /gitsync
 
 FROM bitnami/git:2.39.1-debian-11-r6
 ARG ROLE_ID
