@@ -1,0 +1,6 @@
+../src/.env
+/dags
+.idea
+.DS_Store
+*/.env
+
