@@ -3,20 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
-
+	git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/go-github/v67/github"
 	vault "github.com/hashicorp/vault-client-go"
 	"github.com/hashicorp/vault-client-go/schema"
 	githubauth "github.com/jferrl/go-githubauth"
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 //type Vault struct {
@@ -83,7 +84,11 @@ func NewGithubSession(roleID, secretID, organization string) (*GithubSession, er
 }
 
 func (s *GithubSession) renewVault() error {
-	vault, err := NewVault(s.roleID, s.secretID, os.Getenv("VAULT_ADDR"))
+	vault_addr, ok := os.LookupEnv("VAULT_ADDR")
+	if !ok {
+		log.Fatal("VAULT_ADDR is not present")
+	}
+	vault, err := NewVault(s.roleID, s.secretID, vault_addr)
 	if err != nil {
 		return err
 	}
@@ -156,20 +161,52 @@ func clone(path string, repos []map[string]string) {
 }
 
 func cloneRepo(path, token, org, repo string) {
-	cmd := exec.Command("git", "clone", fmt.Sprintf("https://oauth2:%s@github.com/%s/%s.git", token, org, repo), path)
-	err := cmd.Run()
+	r, err := git.PlainClone(path, false, &git.CloneOptions{
+		Auth: &http.BasicAuth{
+			Username: "oauth2", // yes, this can be anything except an empty string
+			Password: token,
+		},
+		URL:      fmt.Sprintf("https://github.com/%s/%s.git", org, repo),
+		Progress: io.Discard,
+	})
+	r.Head()
+
+	//cmd := exec.Command("git", "clone", fmt.Sprintf("https://oauth2:%s@github.com/%s/%s.git", token, org, repo), path)
+
 	if err != nil {
 		fmt.Println("Error:", err)
 	}
 }
 
 func pullRepo(path, token, org, repo string) {
-	cmd := exec.Command("git", "-C", path, "pull")
-	err := cmd.Run()
+	r, err := git.PlainOpen(path)
+	CheckIfError(err)
+	w, err := r.Worktree()
+	CheckIfError(err)
+	err = w.Pull(&git.PullOptions{
+		Auth: &http.BasicAuth{
+			Username: "oauth2", // yes, this can be anything except an empty string
+			Password: token,
+		},
+	})
+	//cmd := exec.Command("git", "-C", path, "pull")
+	//err := cmd.Run()
 	if err != nil {
-		fmt.Println("Unable to pull, removing directory and cloning a fresh copy.")
-		os.RemoveAll(path)
-		cloneRepo(path, token, org, repo)
+		if err == git.NoErrAlreadyUpToDate {
+			fmt.Println(err)
+		} else {
+			fmt.Println("Error:", err)
+			fmt.Println("Unable to pull, removing directory and cloning a fresh copy.")
+			os.RemoveAll(path)
+			cloneRepo(path, token, org, repo)
+		}
+	} else {
+		ref, err := r.Head()
+		CheckIfError(err)
+		commit, err := r.CommitObject(ref.Hash())
+		CheckIfError(err)
+
+		fmt.Println(commit)
 	}
 }
 
@@ -185,11 +222,20 @@ func contains(slice []string, item string) bool {
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		print("Error loading .env file, proceeding with environment variables")
+		fmt.Println("Error loading .env file, proceeding with environment variables")
 	}
-	roleID := os.Getenv("ROLE_ID")
-	secretID := os.Getenv("SECRET_ID")
-	dagPath := os.Getenv("DAG_PATH")
+	roleID, ok := os.LookupEnv("ROLE_ID")
+	if !ok {
+		log.Fatal("roleID is not present")
+	}
+	secretID, ok := os.LookupEnv("SECRET_ID")
+	if !ok {
+		log.Fatal("roleID is not present")
+	}
+	dagPath, ok := os.LookupEnv("DAG_PATH")
+	if !ok {
+		log.Fatal("roleID is not present")
+	}
 	orgNames := []string{"MyCarrier-DevOps", "MyCarrier-Engineering"}
 
 	if _, err := os.Stat(dagPath); os.IsNotExist(err) {
@@ -233,4 +279,12 @@ func getRepoNames(repos []map[string]string) []string {
 		names = append(names, "git_"+repo["repository"])
 	}
 	return names
+}
+func CheckIfError(err error) {
+	if err == nil {
+		return
+	}
+
+	fmt.Printf("\x1b[31;1m%s\x1b[0m\n", fmt.Sprintf("error: %s", err))
+	os.Exit(1)
 }
