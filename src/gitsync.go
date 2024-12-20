@@ -26,6 +26,7 @@ import (
 
 func NewVault(roleID, secretID string, vault_addr string) (*vault.Client, error) {
 	ctx := context.Background()
+	vault_addr = strings.SplitAfter(vault_addr, "://")[1]
 	client, err := vault.New(
 		vault.WithAddress("https://"+strings.Trim(vault_addr, "'")),
 		vault.WithRequestTimeout(30*time.Second),
