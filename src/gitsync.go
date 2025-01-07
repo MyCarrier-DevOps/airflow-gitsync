@@ -13,16 +13,15 @@ import (
 	"golang.org/x/oauth2"
 	"io"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
-
-//type Vault struct {
-//  Client *vault.Client
-//}
 
 func NewVault(roleID, secretID string, vault_addr string) (*vault.Client, error) {
 	ctx := context.Background()
@@ -32,7 +31,7 @@ func NewVault(roleID, secretID string, vault_addr string) (*vault.Client, error)
 		vault.WithRequestTimeout(30*time.Second),
 	)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
 	}
 	resp, err := client.Auth.AppRoleLogin(
 		ctx,
@@ -42,11 +41,11 @@ func NewVault(roleID, secretID string, vault_addr string) (*vault.Client, error)
 		},
 	)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
 	}
 
 	if err := client.SetToken(resp.Auth.ClientToken); err != nil {
-		log.Fatal(err)
+		log.Error(err)
 	}
 	vc := client
 	return vc, err
@@ -87,7 +86,7 @@ func NewGithubSession(roleID, secretID, organization string) (*GithubSession, er
 func (s *GithubSession) renewVault() error {
 	vault_addr, ok := os.LookupEnv("VAULT_ADDR")
 	if !ok {
-		log.Fatal("VAULT_ADDR is not present")
+		log.Error("VAULT_ADDR is not present")
 	}
 	vault, err := NewVault(s.roleID, s.secretID, vault_addr)
 	if err != nil {
@@ -138,7 +137,7 @@ func (s *GithubSession) connect() {
 func repoCleanup(path string, repos []string) {
 	directories, err := os.ReadDir(path)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
 	}
 	for _, d := range directories {
 		if !contains(repos, d.Name()) {
@@ -149,20 +148,26 @@ func repoCleanup(path string, repos []string) {
 }
 
 func clone(path string, repos []map[string]string) {
+	var wg sync.WaitGroup
 	for _, repo := range repos {
-		repoPath := filepath.Join(path, "git_"+repo["repository"])
-		if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-			fmt.Printf("%s Cloning %s from %s into %s\n", time.Now().Format(time.RFC3339), repo["repository"], repo["org"], path)
-			cloneRepo(repoPath, repo["token"], repo["org"], repo["repository"])
-		} else {
-			fmt.Printf("%s Pulling %s from %s into %s\n", time.Now().Format(time.RFC3339), repo["repository"], repo["org"], path)
-			pullRepo(repoPath, repo["token"], repo["org"], repo["repository"])
-		}
+		wg.Add(1)
+		go func(repo map[string]string) {
+			defer wg.Done()
+			repoPath := filepath.Join(path, "git_"+repo["repository"])
+			if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+				fmt.Printf("%s Cloning %s from %s into %s\n", time.Now().Format(time.RFC3339), repo["repository"], repo["org"], path)
+				cloneRepo(repoPath, repo["token"], repo["org"], repo["repository"])
+			} else {
+				fmt.Printf("%s Pulling %s from %s into %s\n", time.Now().Format(time.RFC3339), repo["repository"], repo["org"], path)
+				pullRepo(repoPath, repo["token"], repo["org"], repo["repository"])
+			}
+		}(repo)
 	}
+	wg.Wait()
 }
 
 func cloneRepo(path, token, org, repo string) {
-	r, err := git.PlainClone(path, false, &git.CloneOptions{
+	_, err := git.PlainClone(path, false, &git.CloneOptions{
 		Auth: &http.BasicAuth{
 			Username: "oauth2", // yes, this can be anything except an empty string
 			Password: token,
@@ -170,10 +175,6 @@ func cloneRepo(path, token, org, repo string) {
 		URL:      fmt.Sprintf("https://github.com/%s/%s.git", org, repo),
 		Progress: io.Discard,
 	})
-	r.Head()
-
-	//cmd := exec.Command("git", "clone", fmt.Sprintf("https://oauth2:%s@github.com/%s/%s.git", token, org, repo), path)
-
 	if err != nil {
 		fmt.Println("Error:", err)
 	}
@@ -181,33 +182,26 @@ func cloneRepo(path, token, org, repo string) {
 
 func pullRepo(path, token, org, repo string) {
 	r, err := git.PlainOpen(path)
-	CheckIfError(err)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 	w, err := r.Worktree()
-	CheckIfError(err)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 	err = w.Pull(&git.PullOptions{
 		Auth: &http.BasicAuth{
 			Username: "oauth2", // yes, this can be anything except an empty string
 			Password: token,
 		},
 	})
-	//cmd := exec.Command("git", "-C", path, "pull")
-	//err := cmd.Run()
-	if err != nil {
-		if err == git.NoErrAlreadyUpToDate {
-			fmt.Println(err)
-		} else {
-			fmt.Println("Error:", err)
-			fmt.Println("Unable to pull, removing directory and cloning a fresh copy.")
-			os.RemoveAll(path)
-			cloneRepo(path, token, org, repo)
-		}
-	} else {
-		ref, err := r.Head()
-		CheckIfError(err)
-		commit, err := r.CommitObject(ref.Hash())
-		CheckIfError(err)
-
-		fmt.Println(commit)
+	if err != nil && err != git.NoErrAlreadyUpToDate {
+		fmt.Println("Error:", err)
+		fmt.Println("Unable to pull, removing directory and cloning a fresh copy.")
+		os.RemoveAll(path)
+		cloneRepo(path, token, org, repo)
 	}
 }
 
@@ -227,15 +221,15 @@ func main() {
 	}
 	roleID, ok := os.LookupEnv("ROLE_ID")
 	if !ok {
-		log.Fatal("roleID is not present")
+		log.Error("ROLE_ID is not present")
 	}
 	secretID, ok := os.LookupEnv("SECRET_ID")
 	if !ok {
-		log.Fatal("roleID is not present")
+		log.Error("SECRET_ID is not present")
 	}
 	dagPath, ok := os.LookupEnv("DAG_PATH")
 	if !ok {
-		log.Fatal("roleID is not present")
+		log.Error("DAG_PATH is not present")
 	}
 	orgNames := []string{"MyCarrier-DevOps", "MyCarrier-Engineering"}
 
@@ -250,18 +244,24 @@ func main() {
 		for _, orgName := range orgNames {
 			githubSession, err := NewGithubSession(roleID, secretID, orgName)
 			if err != nil {
-				log.Fatal(err)
+				log.Error(err)
 			}
-			reposObj, _, err := githubSession.client.Search.Repositories(context.Background(), fmt.Sprintf("org:%s topic:airflow-dags template:false", orgName), nil)
+			err = withExponentialBackoff(context.Background(), func() error {
+				reposObj, _, err := githubSession.client.Search.Repositories(context.Background(), fmt.Sprintf("org:%s topic:airflow-dags template:false", orgName), nil)
+				if err != nil {
+					return err
+				}
+				for _, repo := range reposObj.Repositories {
+					repos = append(repos, map[string]string{
+						"repository": repo.GetName(),
+						"token":      githubSession.auth.AccessToken,
+						"org":        orgName,
+					})
+				}
+				return nil
+			})
 			if err != nil {
-				log.Fatal(err)
-			}
-			for _, repo := range reposObj.Repositories {
-				repos = append(repos, map[string]string{
-					"repository": repo.GetName(),
-					"token":      githubSession.auth.AccessToken,
-					"org":        orgName,
-				})
+				log.Error(err)
 			}
 			clone(dagPath, repos)
 		}
@@ -269,7 +269,7 @@ func main() {
 		if operation == "pull" {
 			loop = false
 		} else {
-			time.Sleep(30 * time.Second)
+			time.Sleep(300 * time.Second)
 		}
 	}
 }
@@ -281,11 +281,29 @@ func getRepoNames(repos []map[string]string) []string {
 	}
 	return names
 }
-func CheckIfError(err error) {
-	if err == nil {
-		return
+
+func withExponentialBackoff(ctx context.Context, fn func() error) error {
+	var baseDelay time.Duration = 1 * time.Second
+	var maxDelay time.Duration = 32 * time.Second
+	var maxRetries int = 10
+
+	for i := 0; i < maxRetries; i++ {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+
+		delay := baseDelay * time.Duration(math.Pow(2, float64(i)))
+		if delay > maxDelay {
+			delay = maxDelay
+		}
+
+		jitter := time.Duration(rand.Int63n(int64(delay / 2)))
+		delay = delay + jitter
+
+		log.Printf("Request failed: %v. Retrying in %v...", err, delay)
+		time.Sleep(delay)
 	}
 
-	fmt.Printf("\x1b[31;1m%s\x1b[0m\n", fmt.Sprintf("error: %s", err))
-	os.Exit(1)
+	return fmt.Errorf("max retries reached")
 }

@@ -2,5 +2,16 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_Azure-Group-Assignments" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_BillingPull" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_CarrierRepLocationAssignmentDeletions" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_CarrierRepLocationAssignments" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_DownloadProductList" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_ERP-Light-Customer-Request" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_GenerateApiKey" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_ODFL-Invalid-Pros-Flow" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_Remove-NDS-Lock" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_UnlockUserRegistration" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dags/git_UploadProductList" vcs="Git" />
   </component>
 </project>
