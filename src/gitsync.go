@@ -13,6 +13,7 @@ import (
 	"golang.org/x/oauth2"
 	"io"
 	"log"
+	"log/slog"
 	"math"
 	"math/rand"
 	"os"
@@ -24,6 +25,8 @@ import (
 )
 
 func NewVault(roleID, secretID string, vault_addr string) (*vault.Client, error) {
+	jsonHandler := slog.NewJSONHandler(os.Stderr, nil)
+	logger := slog.New(jsonHandler)
 	ctx := context.Background()
 	vault_addr = strings.SplitAfter(vault_addr, "://")[1]
 	client, err := vault.New(
@@ -31,7 +34,7 @@ func NewVault(roleID, secretID string, vault_addr string) (*vault.Client, error)
 		vault.WithRequestTimeout(30*time.Second),
 	)
 	if err != nil {
-		log.Error(err)
+		logger.Error("Error:", "error", err)
 	}
 	resp, err := client.Auth.AppRoleLogin(
 		ctx,
@@ -41,11 +44,11 @@ func NewVault(roleID, secretID string, vault_addr string) (*vault.Client, error)
 		},
 	)
 	if err != nil {
-		log.Error(err)
+		logger.Error("Error", "error", err)
 	}
 
 	if err := client.SetToken(resp.Auth.ClientToken); err != nil {
-		log.Error(err)
+		logger.Error("Error", "error", err)
 	}
 	vc := client
 	return vc, err
@@ -84,9 +87,11 @@ func NewGithubSession(roleID, secretID, organization string) (*GithubSession, er
 }
 
 func (s *GithubSession) renewVault() error {
+	jsonHandler := slog.NewJSONHandler(os.Stderr, nil)
+	logger := slog.New(jsonHandler)
 	vault_addr, ok := os.LookupEnv("VAULT_ADDR")
 	if !ok {
-		log.Error("VAULT_ADDR is not present")
+		logger.Error("VAULT_ADDR is not present")
 	}
 	vault, err := NewVault(s.roleID, s.secretID, vault_addr)
 	if err != nil {
@@ -137,7 +142,7 @@ func (s *GithubSession) connect() {
 func repoCleanup(path string, repos []string) {
 	directories, err := os.ReadDir(path)
 	if err != nil {
-		log.Error(err)
+		fmt.Println(err)
 	}
 	for _, d := range directories {
 		if !contains(repos, d.Name()) {
@@ -215,21 +220,23 @@ func contains(slice []string, item string) bool {
 }
 
 func main() {
+	jsonHandler := slog.NewJSONHandler(os.Stderr, nil)
+	logger := slog.New(jsonHandler)
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Println("Error loading .env file, proceeding with environment variables")
 	}
 	roleID, ok := os.LookupEnv("ROLE_ID")
 	if !ok {
-		log.Error("ROLE_ID is not present")
+		log.Fatal("ROLE_ID is not present")
 	}
 	secretID, ok := os.LookupEnv("SECRET_ID")
 	if !ok {
-		log.Error("SECRET_ID is not present")
+		log.Fatal("SECRET_ID is not present")
 	}
 	dagPath, ok := os.LookupEnv("DAG_PATH")
 	if !ok {
-		log.Error("DAG_PATH is not present")
+		log.Fatal("DAG_PATH is not present")
 	}
 	orgNames := []string{"MyCarrier-DevOps", "MyCarrier-Engineering"}
 
@@ -244,7 +251,7 @@ func main() {
 		for _, orgName := range orgNames {
 			githubSession, err := NewGithubSession(roleID, secretID, orgName)
 			if err != nil {
-				log.Error(err)
+				logger.Error("Error creating githubSession", "error", err)
 			}
 			err = withExponentialBackoff(context.Background(), func() error {
 				reposObj, _, err := githubSession.client.Search.Repositories(context.Background(), fmt.Sprintf("org:%s topic:airflow-dags template:false", orgName), nil)
@@ -261,7 +268,7 @@ func main() {
 				return nil
 			})
 			if err != nil {
-				log.Error(err)
+				logger.Error("Error:", "error", err)
 			}
 			clone(dagPath, repos)
 		}
